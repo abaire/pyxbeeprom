@@ -107,6 +107,14 @@ class XBE_REGION(enum.Enum):
     EURO_AUSTRALIA = 0x04
 
 
+class AudioMode(enum.Enum):
+    """Enumerates the possible speaker modes."""
+
+    SURROUND = 1
+    STEREO = 2
+    MONO = 3
+
+
 class VideoSettings(ctypes.LittleEndianStructure):
     """Fields within the VideoFlags"""
 
@@ -233,6 +241,55 @@ class EEPROMData(ctypes.LittleEndianStructure):
     def __init__(self, *args: Any, **kw: Any):
         self._encrypted = True
         super().__init__(*args, **kw)
+
+    @property
+    def audio_mode(self):
+        audio = AudioSettings(self.AudioFlags)
+        if audio.Surround:
+            return AudioMode.SURROUND
+        if audio.Mono:
+            return AudioMode.MONO
+        return AudioMode.STEREO
+
+    @audio_mode.setter
+    def audio_mode(self, value):
+        audio = AudioSettings(self.AudioFlags)
+        if value == AudioMode.SURROUND:
+            audio.Surround = 1
+            audio.Mono = 0
+        elif value == AudioMode.MONO:
+            audio.Surround = 0
+            audio.Mono = 1
+        else:
+            audio.Surround = 0
+            audio.Mono = 0
+
+        self._update_audio_flags(audio)
+
+    @property
+    def dolby_digital_flag(self) -> bool:
+        audio = AudioSettings(self.AudioFlags)
+        return audio.AC3
+
+    @dolby_digital_flag.setter
+    def dolby_digital_flag(self, value):
+        audio = AudioSettings(self.AudioFlags)
+        audio.AC3 = value
+        self._update_audio_flags(audio)
+
+    @property
+    def dts_flag(self) -> bool:
+        audio = AudioSettings(self.AudioFlags)
+        return audio.DTS
+
+    @dts_flag.setter
+    def dts_flag(self, value):
+        audio = AudioSettings(self.AudioFlags)
+        audio.DTS = value
+        self._update_audio_flags(audio)
+
+    def _update_audio_flags(self, audio_settings: AudioSettings):
+        self.AudioFlags = struct.unpack("<L", bytearray(audio_settings))[0]
 
     def decrypt(self) -> Optional[XBOX_VERSION]:
         """Decrypt EEPROM using auto-detect by means of the SHA1 Middle Message hack."""
@@ -401,6 +458,7 @@ class EEPROM:
 
     def log_info(self):
         """Dumps the EEPROMData to log output."""
+        self.decrypt()
         logger.info(f" {self._version.name}\n{self._data}\n")
 
     def decrypt(self):
@@ -411,3 +469,27 @@ class EEPROM:
         """Encrypts the current EEPROM state and returns it in a buffer."""
         self._data.encrypt(self._version)
         return bytearray(self._data)
+
+    @property
+    def audio_mode(self):
+        return self._data.audio_mode
+
+    @audio_mode.setter
+    def audio_mode(self, value):
+        self._data.audio_mode = value
+
+    @property
+    def dolby_digital_flag(self) -> bool:
+        return self._data.dolby_digital_flag
+
+    @dolby_digital_flag.setter
+    def dolby_digital_flag(self, value):
+        self._data.dolby_digital_flag = value
+
+    @property
+    def dts_flag(self) -> bool:
+        return self._data.dts_flag
+
+    @dts_flag.setter
+    def dts_flag(self, value):
+        self._data.dts_flag = value
