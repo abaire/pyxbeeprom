@@ -295,6 +295,8 @@ class EEPROMData(ctypes.LittleEndianStructure):
         """Decrypt EEPROM using auto-detect by means of the SHA1 Middle Message hack."""
         xbox_version = XBOX_VERSION.V1_0
         raw_data = bytearray(self)
+        hmac_sha_bytes = bytearray(self.HMAC_SHA1_Hash)
+
         while xbox_version < 13:
             hasher = sha1.SHA1()
 
@@ -312,7 +314,7 @@ class EEPROMData(ctypes.LittleEndianStructure):
                 xbox_version, decrypted_confounder, decrypted_hdd_key, decrypted_region
             )
 
-            if confirm_hash == self.HMAC_SHA1_Hash:
+            if confirm_hash == hmac_sha_bytes:
                 self._encrypted = False
                 self.Confounder = self._CONFOUNDER_TYPE.from_buffer(
                     decrypted_confounder
@@ -322,7 +324,7 @@ class EEPROMData(ctypes.LittleEndianStructure):
                 return XBOX_VERSION(xbox_version)
 
             xbox_version += 1
-        return None
+        raise Exception("Failed to decrypt EEPROM")
 
     def _build_hmac_sha(self, xbox_version, confounder, hddkey, xberegion):
         hasher = sha1.SHA1()
@@ -463,7 +465,10 @@ class EEPROM:
 
     def decrypt(self):
         """Decrypt EEPROM using auto-detect by means of the SHA1 Middle Message hack."""
+        if not self._encrypted:
+            return
         self._version = self._data.decrypt()
+        self._encrypted = False
 
     def encrypt(self) -> bytearray:
         """Encrypts the current EEPROM state and returns it in a buffer."""
